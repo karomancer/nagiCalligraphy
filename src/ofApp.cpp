@@ -10,9 +10,14 @@ void ofApp::setup()
     // Set up canvas
     ofBackground(255);
     
+    // Set up frame buffer
+    ofFboSettings fboSettings;
+    fboSettings.width = width;
+    fboSettings.height = height;
+    canvasFbo.allocate(fboSettings);
+    
     // Set up GUI panel
     guiPanel.setup("DEPTH_DOTS", "settings.json");
-    
     minDepth.set("Min depth", 0.5f, 0.5f, 8.f);
     maxDepth.set("Max depth", 1.3f, 0.5f, 8.f);
     
@@ -26,14 +31,13 @@ void ofApp::setup()
     guiPanel.add(anchorDepth);
         
     // Set up Kinect
-    settings.enableRGB = false;
-    settings.enableIR = false;
-    settings.enableRGBRegistration = false;
-    
-    settings.config.MinDepth = minDepth;
-    settings.config.MaxDepth = maxDepth;
-    
-    kinect.open(0, settings);
+    ofxKinectV2::Settings kinectSettings;
+    kinectSettings.enableRGB = false;
+    kinectSettings.enableIR = false;
+    kinectSettings.enableRGBRegistration = false;
+    kinectSettings.config.MinDepth = minDepth;
+    kinectSettings.config.MaxDepth = maxDepth;
+    kinect.open(0, kinectSettings);
 }
 
 void ofApp::update()
@@ -45,14 +49,29 @@ void ofApp::update()
     {
         depthPixels = kinect.getDepthPixels();
         depthTex.loadData(depthPixels);
+        
+        canvasFbo.begin();
+        ofSetColor(ofColor(0, 0, 0));
+        ofFill();
+        float xMultiplier = (float) ofGetScreenWidth() / depthPixels.getWidth();
+        float yMultiplier = (float) ofGetScreenHeight() / depthPixels.getHeight() + 0.05;
+        
+        for (int y = 0; y < depthPixels.getHeight(); y++) {
+            for (int x = 0; x < depthPixels.getWidth(); x++) {
+                float dist = kinect.getDistanceAt(x, y);
+                
+                if (dist > minDepth && dist < maxDepth) {
+                    float radius = ofMap(dist, minDepth, maxDepth, anchorDepth + 1, 1);
+                    ofDrawCircle(x * xMultiplier + anchorDepth, y * yMultiplier + anchorDepth, radius);
+                }
+            }
+        }
+        canvasFbo.end();
     }
 }
 
 void ofApp::draw()
 {
-    ofSetColor(ofColor(0, 0, 0));
-    ofFill();
-    
     if (showDepthMap) {
         ofSetColor(255);
         ofFill();
@@ -67,22 +86,9 @@ void ofApp::draw()
         const ofFloatPixels& rawDepthPix = kinect.getRawDepthPixels();
         int depthAtMouse = rawDepthPix.getColor(ofGetMouseX(), ofGetMouseY()).r;
         ofDrawBitmapStringHighlight(ofToString(depthAtMouse), ofGetMouseX() + 16, ofGetMouseY() + 10);
-        
     }
     else {
-        float xMultiplier = (float) ofGetScreenWidth() / depthPixels.getWidth();
-        float yMultiplier = (float) ofGetScreenHeight() / depthPixels.getHeight() + 0.05;
-        
-        for (int y = 0; y < depthPixels.getHeight(); y += 2) {
-            for (int x = 0; x < depthPixels.getWidth(); x += 2) {
-                float dist = kinect.getDistanceAt(x, y);
-                
-                if (dist > minDepth && dist < maxDepth) {
-                    float radius = ofMap(dist, minDepth, maxDepth, anchorDepth + 1, 1);
-                    ofDrawCircle(x * xMultiplier + anchorDepth, y * yMultiplier + anchorDepth, radius);
-                }
-            }
-        }
+        canvasFbo.draw(0, 0);
     }
     
     guiPanel.draw();

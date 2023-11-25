@@ -12,9 +12,9 @@ public:
     void update();
     void draw();
     
-    ofxKinectV2 kinect;
-    ofxKinectV2::Settings settings;
+    ofxKinectV2 kinect;    
     ofTexture depthTex;
+    ofFbo canvasFbo;
     
     ofPixels depthPixels;
     
