@@ -1,7 +1,7 @@
 {
     "DEPTH_DOTS": {
         "Base_pixel_size": "0.75",
-        "Max_depth": "1.325",
+        "Max_depth": "1.3",
         "Min_depth": "0.5",
         "Show_Kinect_Depth_Map": "0"
     }

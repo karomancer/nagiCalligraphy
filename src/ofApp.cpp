@@ -54,7 +54,7 @@ void ofApp::update()
         ofSetColor(ofColor(0, 0, 0));
         ofFill();
         float xMultiplier = (float) ofGetScreenWidth() / depthPixels.getWidth();
-        float yMultiplier = (float) ofGetScreenHeight() / depthPixels.getHeight() + 0.05;
+        float yMultiplier = (float) ofGetScreenHeight() / depthPixels.getHeight();
         
         for (int y = 0; y < depthPixels.getHeight(); y++) {
             for (int x = 0; x < depthPixels.getWidth(); x++) {
@@ -62,10 +62,13 @@ void ofApp::update()
                 
                 if (dist > minDepth && dist < maxDepth) {
                     float radius = ofMap(dist, minDepth, maxDepth, anchorDepth + 1, 1);
-                    ofDrawCircle(x * xMultiplier + anchorDepth, y * yMultiplier + anchorDepth, radius);
+                    ofDrawCircle(x * xMultiplier + anchorDepth, y * yMultiplier + anchorDepth, ofRandom(radius, anchorDepth));
                 }
             }
         }
+        ofEnableAlphaBlending();
+        ofSetColor(255, 2);
+        ofDrawRectangle(0, 0, ofGetWidth(), ofGetHeight());
         canvasFbo.end();
     }
 }
