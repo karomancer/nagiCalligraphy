@@ -4,12 +4,16 @@
 #include "ofMain.h"
 #include "ofxKinectV2.h"
 #include "ofxGui.h"
+#include "ofxCv.h"
 
 class ofApp : public ofBaseApp
 {
 public:
     void setup();
     void update();
+    void updateBlobs();
+    void updateCanvas();
+    void updateOutlines();
     void draw();
     
     ofxKinectV2 kinect;
@@ -19,21 +23,41 @@ public:
     ofPixels depthPixels;
     
     ofRectangle drawBounds;
-    
+    ofRectangle drawBoundsTopLeft, drawBoundsTopRight, drawBoundsBottomLeft, drawBoundsBottomRight;
+        
     ofFbo canvasFbo;
-    ofTexture canvasTexture;
+    ofFbo visionFbo;
+    ofFbo blobFbo;
+    ofFbo irFbo;
+    ofFbo depthFbo;
+    ofPixels blobPixels;
     
+    ofxCv::ContourFinder contourFinder;
+    
+    ofParameter<bool> showDebugGrid;
+    ofParameter<bool> showIntermediary;
+    
+    // Controls for Kinect
+    ofxGuiGroup kinectGuiGroup;
+    ofParameter<bool> showDepthMap;
     ofParameter<float> minDepth;
     ofParameter<float> maxDepth;
+    ofParameter<int> anchorDepth;
+    ofParameter<bool> showIRMap;
     ofParameter<float> minIR;
     ofParameter<float> maxIR;
-    ofParameter<float> anchorDepth;
-    ofParameter<int> millisToClear;
     
-    ofParameter<bool> showDepthMap;
-    ofParameter<bool> showIRMap;
+    // Controls for Contour Finder
+    ofxGuiGroup contourFinderGuiGroup;
+    ofParameter<bool> showContours;
+    ofParameter<float> minContourArea;
+    ofParameter<float> maxContourArea;
+    ofParameter<int> persistence;
+    
+    ofParameter<int> millisToClear;
+    int ellapsedMillisSinceClear;
     
     ofxPanel guiPanel;
     
-    int ellapsedMillisSinceClear;
+    
 };
