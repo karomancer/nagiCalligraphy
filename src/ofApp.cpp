@@ -21,10 +21,10 @@ void ofApp::setup()
     int halfHeight = ofGetHeight() / 2;
     int halfKinectWidth = KINECT_DEPTH_WIDTH / 2;
     int halfKinectHeight = KINECT_DEPTH_HEIGHT / 2;
-    drawBoundsTopLeft.set(0, 0, KINECT_DEPTH_WIDTH, KINECT_DEPTH_HEIGHT);
-    drawBoundsTopRight.set(0, 0, KINECT_DEPTH_WIDTH, KINECT_DEPTH_HEIGHT);
-    drawBoundsBottomLeft.set(0, 0, KINECT_DEPTH_WIDTH, KINECT_DEPTH_HEIGHT);
-    drawBoundsBottomRight.set(0, 0, KINECT_DEPTH_WIDTH, KINECT_DEPTH_HEIGHT);
+    drawBoundsTopLeft.set(0, 0, halfWidth, halfHeight);
+    drawBoundsTopRight.set(0, 0, halfWidth, halfHeight);
+    drawBoundsBottomLeft.set(0, 0, halfWidth, halfHeight);
+    drawBoundsBottomRight.set(0, 0, halfWidth, halfHeight);
     
     drawBoundsTopLeft.scaleTo(ofRectangle(0, 0, halfWidth, halfHeight), OF_SCALEMODE_FILL);
     drawBoundsTopRight.scaleTo(ofRectangle(halfWidth, 0, halfWidth, halfHeight), OF_SCALEMODE_FILL); // I have no idea why -320 is neeeded
@@ -46,9 +46,9 @@ void ofApp::setup()
     kinectGuiGroup.setup("Kinect");
     kinectGuiGroup.add(minDepth.set("Min depth", 0.5f, 0.5f, 8.f));
     kinectGuiGroup.add(maxDepth.set("Max depth", 5.f, 0.5f, 8.f));
-    kinectGuiGroup.add(minIR.set("Min IR value", 0.5f, 0.f, 1.f));
-    kinectGuiGroup.add(maxIR.set("Max IR value", 0.5f, 0.f, 1.f));
-    kinectGuiGroup.add(anchorDepth.set("Base pixel size", 1, 1, 5));
+    kinectGuiGroup.add(minIR.set("Min IR value", 0, 0, 255));
+    kinectGuiGroup.add(maxIR.set("Max IR value", 255, 255, 255));
+    kinectGuiGroup.add(anchorDepth.set("Base pixel size", 1, 1, 20));
     guiPanel.add(&kinectGuiGroup);
     
     // Contour finder GUI options
@@ -66,9 +66,10 @@ void ofApp::setup()
     kinectSettings.enableRGB = false;
     kinectSettings.enableIR = true;
     kinectSettings.enableRGBRegistration = false;
-//    kinectSettings.config.MinDepth = minDepth;
-//    kinectSettings.config.MaxDepth = maxDepth;
+    //    kinectSettings.config.MinDepth = minDepth;
+    //    kinectSettings.config.MaxDepth = maxDepth;
     kinect.open(0, kinectSettings);
+    kinect.irExposure = 0.1f; // this was totally not documented
     
     ellapsedMillisSinceClear = 0;
 }
@@ -83,11 +84,11 @@ void ofApp::update()
         // Depth code
         depthPixels = kinect.getDepthPixels();
         depthTex.loadData(depthPixels);
-
+        
         // Infrared luminosity code
         irPixels = kinect.getIRPixels();
         irTex.loadData(irPixels);
-    
+        
         // Update blobs, outlines, and canvas FBOs
         updateBlobs();
         updateOutlines();
@@ -96,31 +97,16 @@ void ofApp::update()
 }
 
 void ofApp::updateBlobs() {
-    blobFbo.allocate(KINECT_DEPTH_WIDTH, KINECT_DEPTH_HEIGHT);
+    blobPixels.allocate(KINECT_DEPTH_WIDTH, KINECT_DEPTH_HEIGHT, OF_IMAGE_GRAYSCALE);
     
-    blobFbo.begin();
-    ofBackground(ofColor::black); // Because not scaling well
-    ofFill();
-    
-    for (int y = 0; y < depthPixels.getHeight(); y++) {
-        for (int x = 0; x < depthPixels.getWidth(); x++) {
-            float dist = kinect.getDistanceAt(x, y);
+    for (int y = 0; y < irPixels.getHeight(); y++) {
+        for (int x = 0; x < irPixels.getWidth(); x++) {
             float ir = irPixels.getColor(x, y).r;
-            
-            if (ir > maxIR && ir < minIR) {
-//            if (dist > minDepth && dist < maxDepth) {
-//                int grayInt = ofMap(dist, minDepth, maxDepth, 255, 0);
-                int grayInt = 255;
-                float radius = ofMap(ir, minIR, maxIR, anchorDepth + 1, 1);                ofSetColor(ofColor(grayInt, grayInt, grayInt));
-                ofDrawCircle(x, y, radius);
-            }
+            blobPixels.setColor(x, y, ir > minIR ? ofColor::white :  ofColor::black);
         }
     }
-    blobFbo.end();
     
-    // Reading the frame buffer object (FBO) to pixels for
-    // the contour finder to compare against
-    blobFbo.readToPixels(blobPixels);
+    blobImage.setFromPixels(blobPixels);
 }
 
 void ofApp::updateCanvas() {
@@ -130,15 +116,21 @@ void ofApp::updateCanvas() {
     float xMultiplier = (float) ofGetScreenWidth() / depthPixels.getWidth();
     float yMultiplier = (float) ofGetScreenHeight() / depthPixels.getHeight();
     
-    for (int y = 0; y < depthPixels.getHeight(); y++) {
-        for (int x = 0; x < depthPixels.getWidth(); x++) {
-            float dist = kinect.getDistanceAt(x, y);
-            
+    for (int _x = 0; _x < currBrush.width; _x++) {
+        for (int _y = 0; _y < currBrush.height; _y++) {
+            float dist = kinect.getDistanceAt(currBrush.x + _x, currBrush.y + _y);
+
             if (dist > minDepth && dist < maxDepth) {
-                //                float newX = ofLerp(, x * xMultiplier, 0.5);
-                //                float newY = ofLerp(, y * yMultiplier, 0.5);
-                float radius = ofMap(dist, minDepth, maxDepth, anchorDepth + 1, 1);
-                ofDrawCircle(x * xMultiplier + anchorDepth, y * yMultiplier + anchorDepth, ofRandom(radius, anchorDepth));
+                int newX = ofLerp(prevBrush.x + _x, currBrush.x + _x, 0.1);
+                int newY = ofLerp(prevBrush.y + _y, currBrush.y + _y, 0.1);
+
+                float alpha = ofMap(dist, minDepth, maxDepth, 255, 100);
+                float radius = ofMap(dist, minDepth, maxDepth, anchorDepth, 0);
+                float paintSplatter = ofNoise(newX, newY);
+                float randomPaintSplatter = ofRandom(0, anchorDepth);
+                
+                ofColor color = ofColor(0, 0, 0, alpha);
+                ofDrawCircle(newX * xMultiplier + paintSplatter * anchorDepth, newY * yMultiplier + paintSplatter * anchorDepth, radius);
             }
         }
     }
@@ -162,7 +154,7 @@ void ofApp::updateOutlines() {
     contourFinder.setMinAreaRadius(minContourArea);
     contourFinder.setMaxAreaRadius(maxContourArea);
     contourFinder.getTracker().setPersistence(persistence);
-    contourFinder.findContours(showDepthMap ? depthPixels : blobPixels);
+    contourFinder.findContours(showDepthMap ? depthPixels : irPixels);
     std::vector<cv::Rect> blobs = contourFinder.getBoundingRects();
     
     // Draw the contour in its own FBO to render later
@@ -180,6 +172,13 @@ void ofApp::updateOutlines() {
         
         ofDrawRectangle(boundingRect.x, boundingRect.y, boundingRect.width, boundingRect.height);
     }
+    
+    // for now, just set one nagi
+    if (blobs.size() > 0) {
+        prevBrush = currBrush;
+        currBrush = blobs[0];
+    }
+    
     visionFbo.end();
 }
 
@@ -189,9 +188,9 @@ void ofApp::draw()
     if (showDebugGrid) {
         depthTex.draw(drawBoundsTopLeft);
         irTex.draw(drawBoundsTopRight);
-        blobFbo.draw(drawBoundsBottomLeft);
-        visionFbo.draw(drawBoundsBottomLeft);
         canvasFbo.draw(drawBoundsBottomRight);
+        blobImage.draw(drawBoundsBottomLeft);
+        visionFbo.draw(drawBoundsBottomLeft);
         
         // Get the point distance using the SDK function (in meters).
         float mouseX = ofGetMouseX();
@@ -201,13 +200,13 @@ void ofApp::draw()
         if (drawBoundsTopLeft.inside(mouseX, mouseY)) {
             float mappedX = ofMap(mouseX, 0, ofGetWidth()/2, 0, KINECT_DEPTH_WIDTH);
             float distAtMouse = kinect.getDistanceAt(mappedX, mappedY);
-            ofDrawBitmapStringHighlight("Depth: " + ofToString(distAtMouse, 3), mouseX, mouseY);
+            ofDrawBitmapStringHighlight("Depth: " + ofToString(distAtMouse, 3), mouseX, mouseY  + 10);
         }
         // If cursor is in IR map
         else if (drawBoundsTopRight.inside(mouseX, mouseY)) {
             float mappedX = ofMap(mouseX, ofGetWidth()/2, ofGetWidth(), 0, KINECT_DEPTH_WIDTH);
             float ir = irPixels.getColor(mappedX, mappedY).r;
-            ofDrawBitmapStringHighlight("IR: " + ofToString(ir, 3), mouseX, mouseY);
+            ofDrawBitmapStringHighlight("IR: " + ofToString(ir, 3), mouseX, mouseY  + 10);
         }
         
         

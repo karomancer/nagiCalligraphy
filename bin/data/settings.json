@@ -1,16 +1,16 @@
 {
     "BRUSH_STROKES": {
         "Contour_Finder": {
-            "Max_area": "237.245",
-            "Min_area": "22.9592",
+            "Max_area": "44.3878",
+            "Min_area": "4.59184",
             "Persistence": "872",
             "Show_contours": "1"
         },
         "Kinect": {
             "Base_pixel_size": "3",
-            "Max_IR_value": "0.5",
-            "Max_depth": "1.87755",
-            "Min_IR_value": "0.5",
+            "Max_IR_value": "255",
+            "Max_depth": "2.14541",
+            "Min_IR_value": "75",
             "Min_depth": "0.5",
             "Show_Kinect_Depth_Map": "0"
         },

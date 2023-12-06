@@ -18,7 +18,7 @@ public:
     
     ofxKinectV2 kinect;
     ofTexture irTex;
-    ofFloatPixels irPixels;
+    ofPixels irPixels;
     ofTexture depthTex;
     ofPixels depthPixels;
     
@@ -27,10 +27,14 @@ public:
         
     ofFbo canvasFbo;
     ofFbo visionFbo;
-    ofFbo blobFbo;
     ofFbo irFbo;
     ofFbo depthFbo;
     ofPixels blobPixels;
+    ofImage blobImage;
+    
+    // For now, just one
+    cv::Rect prevBrush;
+    cv::Rect currBrush;
     
     ofxCv::ContourFinder contourFinder;
     
@@ -44,8 +48,8 @@ public:
     ofParameter<float> maxDepth;
     ofParameter<int> anchorDepth;
     ofParameter<bool> showIRMap;
-    ofParameter<float> minIR;
-    ofParameter<float> maxIR;
+    ofParameter<int> minIR;
+    ofParameter<int> maxIR;
     
     // Controls for Contour Finder
     ofxGuiGroup contourFinderGuiGroup;
