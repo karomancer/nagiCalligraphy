@@ -3,6 +3,7 @@
 
 const int KINECT_DEPTH_WIDTH = 512;
 const int KINECT_DEPTH_HEIGHT = 424;
+const int BITMAP_STRING_PADDING = 10;
 
 void ofApp::setup()
 {
@@ -12,6 +13,7 @@ void ofApp::setup()
     
     // Set up canvas
     ofBackground(255);
+    ofSetFrameRate(200);
     
     // Set up drawing bounds for mapping 512x424 to full screen later
     drawBounds.set(0, 0, KINECT_DEPTH_WIDTH, KINECT_DEPTH_HEIGHT);
@@ -119,11 +121,11 @@ void ofApp::updateCanvas() {
     for (int _x = 0; _x < currBrush.width; _x++) {
         for (int _y = 0; _y < currBrush.height; _y++) {
             float dist = kinect.getDistanceAt(currBrush.x + _x, currBrush.y + _y);
-
+            
             if (dist > minDepth && dist < maxDepth) {
-                int newX = ofLerp(prevBrush.x + _x, currBrush.x + _x, 0.1);
-                int newY = ofLerp(prevBrush.y + _y, currBrush.y + _y, 0.1);
-
+                int newX = ofLerp(prevBrush.x + _x, currBrush.x + _x, 0.5);
+                int newY = ofLerp(prevBrush.y + _y, currBrush.y + _y, 0.5);
+                
                 float alpha = ofMap(dist, minDepth, maxDepth, 255, 100);
                 float radius = ofMap(dist, minDepth, maxDepth, anchorDepth, 0);
                 float paintSplatter = ofNoise(newX, newY);
@@ -186,11 +188,19 @@ void ofApp::draw()
 {
     ofBackground(ofColor::white);
     if (showDebugGrid) {
+        int width = ofGetWidth();
+        int height = ofGetHeight();
+        
         depthTex.draw(drawBoundsTopLeft);
         irTex.draw(drawBoundsTopRight);
-        canvasFbo.draw(drawBoundsBottomRight);
         blobImage.draw(drawBoundsBottomLeft);
         visionFbo.draw(drawBoundsBottomLeft);
+        canvasFbo.draw(drawBoundsBottomRight);
+        
+        ofDrawBitmapStringHighlight("Kinect Depth Camera", BITMAP_STRING_PADDING, height/2 + BITMAP_STRING_PADDING);
+        ofDrawBitmapStringHighlight("Kinect IR Camera", width/2 + BITMAP_STRING_PADDING, height/2 + BITMAP_STRING_PADDING);
+        ofDrawBitmapStringHighlight("Masked IR + CV Contours", BITMAP_STRING_PADDING, height - BITMAP_STRING_PADDING);
+        ofDrawBitmapStringHighlight("Output", width/2 + BITMAP_STRING_PADDING, height - BITMAP_STRING_PADDING);
         
         // Get the point distance using the SDK function (in meters).
         float mouseX = ofGetMouseX();
@@ -200,18 +210,14 @@ void ofApp::draw()
         if (drawBoundsTopLeft.inside(mouseX, mouseY)) {
             float mappedX = ofMap(mouseX, 0, ofGetWidth()/2, 0, KINECT_DEPTH_WIDTH);
             float distAtMouse = kinect.getDistanceAt(mappedX, mappedY);
-            ofDrawBitmapStringHighlight("Depth: " + ofToString(distAtMouse, 3), mouseX, mouseY  + 10);
+            ofDrawBitmapStringHighlight("Depth: " + ofToString(distAtMouse, 3), mouseX, mouseY  + BITMAP_STRING_PADDING);
         }
         // If cursor is in IR map
         else if (drawBoundsTopRight.inside(mouseX, mouseY)) {
             float mappedX = ofMap(mouseX, ofGetWidth()/2, ofGetWidth(), 0, KINECT_DEPTH_WIDTH);
             float ir = irPixels.getColor(mappedX, mappedY).r;
-            ofDrawBitmapStringHighlight("IR: " + ofToString(ir, 3), mouseX, mouseY  + 10);
+            ofDrawBitmapStringHighlight("IR: " + ofToString(ir, 3), mouseX, mouseY  + BITMAP_STRING_PADDING);
         }
-        
-        
-        
-        
     } else {
         canvasFbo.draw(0, 0);
         
