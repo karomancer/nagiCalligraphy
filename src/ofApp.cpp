@@ -10,8 +10,8 @@ void ofApp::setup()
 {
     int width = ofGetScreenWidth();
     int height = ofGetScreenHeight();
-    xMultiplier = (float) ofGetScreenWidth() / depthPixels.getWidth();
-    yMultiplier = (float) ofGetScreenHeight() / depthPixels.getHeight();
+    xMultiplier = (float) ofGetScreenWidth() / KINECT_DEPTH_WIDTH;
+    yMultiplier = (float) ofGetScreenHeight() / KINECT_DEPTH_HEIGHT;
     
     ofSetWindowShape(width, height);
     
@@ -39,14 +39,19 @@ void ofApp::setup()
     
     // Set up frame buffer
     ofFboSettings fboSettings;
-    fboSettings.width = KINECT_DEPTH_WIDTH;
-    fboSettings.height = KINECT_DEPTH_HEIGHT;
+    fboSettings.width = width;
+    fboSettings.height = height;
     canvasFbo.allocate(fboSettings);
     
     // Set up GUI panel
     guiPanel.setup("BRUSH_STROKES", "settings.json");
+    guiPanel.add(clearScreenButton.setup("Clear screen"));
+    guiPanel.add(takePhotoButton.setup("Take screenshot"));
     guiPanel.add(showDebugGrid.set("Show debug grid", false));
     guiPanel.add(secondsToClear.set("seconds before clear", 10, 0, 60));
+    
+    clearScreenButton.addListener(this,&ofApp::clearCanvasFbo);
+    takePhotoButton.addListener(this,&ofApp::saveScreen);
     
     // Kinect GUI options
     kinectGuiGroup.setup("Kinect");
@@ -78,6 +83,14 @@ void ofApp::setup()
     ellapsedMillisSinceNagiSeen = 0;
 }
 
+void ofApp::clearCanvasFbo() {
+    canvasFbo.clear();
+};
+
+void ofApp::saveScreen() {
+    
+};
+
 void ofApp::update()
 {
     kinect.update();
@@ -95,13 +108,13 @@ void ofApp::update()
         // Infrared luminosity code
         irPixels = kinect.getIRPixels();
         irTex.loadData(irPixels);
-        
-        // Update blobs, outlines, and canvas FBOs
-        updateBlobs();
-        updateOutlines();
-        updateCanvas();
-        pruneTrackingObjects();
     }
+    
+    // Update blobs, outlines, and canvas FBOs
+    updateBlobs();
+    updateOutlines();
+    updateCanvas();
+    pruneTrackingObjects();
 }
 
 void ofApp::updateBlobs() {
@@ -133,44 +146,37 @@ void ofApp::pruneTrackingObjects() {
 
 void ofApp::updateCanvas() {
     canvasFbo.begin();
-    ofSetColor(ofColor::black);
-    ofFill();
     
     int i = 0;
     for (auto it = nagiTrackingMap.begin(); it != nagiTrackingMap.end(); ++it) {
         int label = it->first;
+        int colorValueR = i % 2 != 0 ? label : 0;
+        int colorValueB = i % 2 == 0 ? label : 0;
         ofPolyline polyline = it->second;
+        
+        ofSetColor(ofColor(colorValueR, 0, colorValueB));
+        ofFill();
                 
         // if not found
         if (prevNagiTrackingMap.find(label) == prevNagiTrackingMap.end()) {
             prevNagiTrackingMap[label] = polyline;
             ofPath path = polyToPath(polyline);
-            path.setFillColor(ofColor(i % 2 != 0 ? label : 0, 0, i % 2 == 0 ? label : 0));
+            path.setFillColor(ofColor(colorValueR, 0, colorValueB));
             path.draw();
         } else {
             ofPolyline prevPolyline = prevNagiTrackingMap[label];
+            ofVec2f p1(prevPolyline.getVertices()[0].x, prevPolyline.getVertices()[0].y);
+            ofVec2f p2(polyline.getVertices()[0].x, polyline.getVertices()[0].y);
+            float velocity = ofMap(abs(p1.distance(p2)), 0, 80, 1, 0.5);
+            
             ofPolyline newPolyline = lerpPolyline(prevPolyline, polyline);
             
             ofPath path = polyToPath(newPolyline);
-            path.setFillColor(ofColor(i % 2 != 0 ? label : 0, 0, i % 2 == 0 ? label : 0));
+            path.setFillColor(ofColor(colorValueR, 0, colorValueB));
+            path.scale(velocity, velocity);
             path.draw();
             
             prevNagiTrackingMap[label] = newPolyline;
-            //                        int width = ofLerp(prevBoundingRect.width, boundingRect.width, 0.1);
-            //                        int height = ofLerp(prevBoundingRect.height, boundingRect.height, 0.1);
-            //
-            //
-            //            ofVec2f p1(boundingRect.x, boundingRect.y);
-            //            ofVec2f p2(prevBoundingRect.x, prevBoundingRect.y);
-            //            float velocity = abs(p1.distance(p2));
-            //            float radius = ofMap(velocity, 0, 200, anchorDepth, 1);
-            //            float randomPaintSplatter = ofRandom(0, 5);
-            //
-            //            prevNagiTrackingMap[label] = cv::Rect(x, y, width, height);
-            //
-            //            ofDrawCircle(x * xMultiplier, y * yMultiplier, radius + randomPaintSplatter);
-            //        }
-            
             i++;
         }
     }
@@ -256,7 +262,7 @@ void ofApp::draw()
             ofDrawBitmapStringHighlight("IR: " + ofToString(ir, 3), mouseX, mouseY  + BITMAP_STRING_PADDING);
         }
     } else {
-        canvasFbo.draw(drawBounds);
+        canvasFbo.draw(0, 0);
         
         if (showContours) {
             visionFbo.draw(drawBounds);
@@ -281,18 +287,19 @@ ofPolyline ofApp::lerpPolyline(ofPolyline poly1, ofPolyline poly2) {
 ofPath ofApp::polyToPath(ofPolyline poly) {
     ofPath path;
     
+    path.setCurveResolution(50);
     for( int i = 0; i < poly.getVertices().size(); i++) {
         glm::vec2 vertex = poly.getVertices()[i];
         if (i == 0) {
             path.newSubPath();
-            path.moveTo(vertex.x, vertex.y);
+            path.moveTo(vertex.x * xMultiplier, vertex.y * yMultiplier);
         } else {
-            path.lineTo(vertex.x, vertex.y);
+            path.lineTo(vertex.x * xMultiplier, vertex.y * yMultiplier);
         }
     }
     
     path.close();
-    path.simplify();
+//    path.simplify();
     
     return path;
 }

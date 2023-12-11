@@ -14,7 +14,9 @@ public:
     void updateBlobs();
     void updateCanvas();
     void updateOutlines();
-    void pruneTrackingObjects();    
+    void pruneTrackingObjects();
+    void clearCanvasFbo();
+    void saveScreen();
     void draw();
     ofPath polyToPath(ofPolyline poly);
     ofPolyline lerpPolyline(ofPolyline poly1, ofPolyline poly2);
@@ -48,7 +50,9 @@ public:
     
     ofxCv::ContourFinder contourFinder;
     
-    ofParameter<bool> showDebugGrid;
+    ofxButton clearScreenButton;
+    ofxButton takePhotoButton;
+    ofParameter<bool> showDebugGrid;    
     ofParameter<bool> showIntermediary;
     
     // Controls for Kinect

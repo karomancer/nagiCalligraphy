@@ -7,7 +7,7 @@
             "Show_contours": "1"
         },
         "Kinect": {
-            "Base_pixel_size": "50",
+            "Base_pixel_size": "9",
             "Max_IR_value": "255",
             "Max_depth": "1.83929",
             "Min_IR_value": "32",
