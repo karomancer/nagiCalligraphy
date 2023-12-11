@@ -14,14 +14,18 @@ public:
     void updateBlobs();
     void updateCanvas();
     void updateOutlines();
-    void pruneTrackingObjects();
+    void pruneTrackingObjects();    
     void draw();
+    ofPath polyToPath(ofPolyline poly);
+    ofPolyline lerpPolyline(ofPolyline poly1, ofPolyline poly2);
     
     ofxKinectV2 kinect;
     ofTexture irTex;
     ofPixels irPixels;
     ofTexture depthTex;
     ofPixels depthPixels;
+    
+    float xMultiplier, yMultiplier;
     
     ofRectangle drawBounds;
     ofRectangle drawBoundsTopLeft, drawBoundsTopRight, drawBoundsBottomLeft, drawBoundsBottomRight;
@@ -34,8 +38,8 @@ public:
     ofImage blobImage;
     
     // For now, just one
-    std::map<int, cv::Rect> prevNagiTrackingMap;
-    std::map<int, cv::Rect> nagiTrackingMap;
+    std::map<int, ofPolyline> prevNagiTrackingMap;
+    std::map<int, ofPolyline> nagiTrackingMap;
     // We're going to be using these to determine
     // which objects we're still tracking
     // (and idsToDelete is to send a delete message to the other side)

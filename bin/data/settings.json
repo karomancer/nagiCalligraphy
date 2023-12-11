@@ -15,10 +15,10 @@
             "Show_Kinect_Depth_Map": "0"
         },
         "Milliseconds_before_clearing": "20",
-        "Show_debug_grid": "1",
+        "Show_debug_grid": "0",
         "Show_intermediary_step": "0",
         "ms_before_clear": "10000",
-        "seconds_before_clear": "6"
+        "seconds_before_clear": "20"
     },
     "DEPTH_DOTS": {
         "Base_pixel_size": "0.75",

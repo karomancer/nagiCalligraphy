@@ -4,11 +4,15 @@
 const int KINECT_DEPTH_WIDTH = 512;
 const int KINECT_DEPTH_HEIGHT = 424;
 const int BITMAP_STRING_PADDING = 10;
+const int POLYLINE_COUNT = 40;
 
 void ofApp::setup()
 {
     int width = ofGetScreenWidth();
     int height = ofGetScreenHeight();
+    xMultiplier = (float) ofGetScreenWidth() / depthPixels.getWidth();
+    yMultiplier = (float) ofGetScreenHeight() / depthPixels.getHeight();
+    
     ofSetWindowShape(width, height);
     
     // Set up canvas
@@ -35,8 +39,8 @@ void ofApp::setup()
     
     // Set up frame buffer
     ofFboSettings fboSettings;
-    fboSettings.width = width;
-    fboSettings.height = height;
+    fboSettings.width = KINECT_DEPTH_WIDTH;
+    fboSettings.height = KINECT_DEPTH_HEIGHT;
     canvasFbo.allocate(fboSettings);
     
     // Set up GUI panel
@@ -67,7 +71,7 @@ void ofApp::setup()
     ofxKinectV2::Settings kinectSettings;
     kinectSettings.enableRGB = false;
     kinectSettings.enableIR = true;
-    kinectSettings.enableRGBRegistration = false;    
+    kinectSettings.enableRGBRegistration = false;
     kinect.open(0, kinectSettings);
     kinect.irExposure = 0.05f; // this was totally not documented
     
@@ -131,39 +135,44 @@ void ofApp::updateCanvas() {
     canvasFbo.begin();
     ofSetColor(ofColor::black);
     ofFill();
-    float xMultiplier = (float) ofGetScreenWidth() / depthPixels.getWidth();
-    float yMultiplier = (float) ofGetScreenHeight() / depthPixels.getHeight();
     
     int i = 0;
     for (auto it = nagiTrackingMap.begin(); it != nagiTrackingMap.end(); ++it) {
         int label = it->first;
-        ofSetColor(ofColor(i % 2 != 0 ? label : 0, 0, i % 2 == 0 ? label : 0));
-        ofFill();
-        cv::Rect boundingRect = it->second;
-        
+        ofPolyline polyline = it->second;
+                
         // if not found
         if (prevNagiTrackingMap.find(label) == prevNagiTrackingMap.end()) {
-            prevNagiTrackingMap[label] = boundingRect;
-            ofDrawCircle(boundingRect.x, boundingRect.y, anchorDepth);
+            prevNagiTrackingMap[label] = polyline;
+            ofPath path = polyToPath(polyline);
+            path.setFillColor(ofColor(i % 2 != 0 ? label : 0, 0, i % 2 == 0 ? label : 0));
+            path.draw();
         } else {
-            cv::Rect prevBoundingRect = prevNagiTrackingMap[label];
-            int x = ofLerp(prevBoundingRect.x, boundingRect.x, 0.1);
-            int y = ofLerp(prevBoundingRect.y, boundingRect.y, 0.1);
-            int width = ofLerp(prevBoundingRect.width, boundingRect.width, 0.1);
-            int height = ofLerp(prevBoundingRect.height, boundingRect.height, 0.1);
+            ofPolyline prevPolyline = prevNagiTrackingMap[label];
+            ofPolyline newPolyline = lerpPolyline(prevPolyline, polyline);
             
+            ofPath path = polyToPath(newPolyline);
+            path.setFillColor(ofColor(i % 2 != 0 ? label : 0, 0, i % 2 == 0 ? label : 0));
+            path.draw();
             
-            ofVec2f p1(boundingRect.x, boundingRect.y);
-            ofVec2f p2(prevBoundingRect.x, prevBoundingRect.y);
-            float velocity = abs(p1.distance(p2));
-            float radius = ofMap(velocity, 0, 200, anchorDepth, 1);
-            float randomPaintSplatter = ofRandom(0, 5);
+            prevNagiTrackingMap[label] = newPolyline;
+            //                        int width = ofLerp(prevBoundingRect.width, boundingRect.width, 0.1);
+            //                        int height = ofLerp(prevBoundingRect.height, boundingRect.height, 0.1);
+            //
+            //
+            //            ofVec2f p1(boundingRect.x, boundingRect.y);
+            //            ofVec2f p2(prevBoundingRect.x, prevBoundingRect.y);
+            //            float velocity = abs(p1.distance(p2));
+            //            float radius = ofMap(velocity, 0, 200, anchorDepth, 1);
+            //            float randomPaintSplatter = ofRandom(0, 5);
+            //
+            //            prevNagiTrackingMap[label] = cv::Rect(x, y, width, height);
+            //
+            //            ofDrawCircle(x * xMultiplier, y * yMultiplier, radius + randomPaintSplatter);
+            //        }
             
-            prevNagiTrackingMap[label] = cv::Rect(x, y, width, height);
-            
-            ofDrawCircle(x * xMultiplier, y * yMultiplier, radius + randomPaintSplatter);
+            i++;
         }
-        i++;
     }
     
     if (presentIds.size() == 0) {
@@ -200,7 +209,8 @@ void ofApp::updateOutlines() {
         int label = contourFinder.getLabel(i);
         ofColor color = ofColor::red;
         cv::Rect boundingRect = blobs[i];
-        nagiTrackingMap[label] = boundingRect;
+        
+        nagiTrackingMap[label] = polylines[i].getResampledByCount(POLYLINE_COUNT);
         presentIds.push_back(label);
         
         color.setHueAngle(color.getHueAngle() + label * 5);
@@ -246,7 +256,7 @@ void ofApp::draw()
             ofDrawBitmapStringHighlight("IR: " + ofToString(ir, 3), mouseX, mouseY  + BITMAP_STRING_PADDING);
         }
     } else {
-        canvasFbo.draw(0, 0);
+        canvasFbo.draw(drawBounds);
         
         if (showContours) {
             visionFbo.draw(drawBounds);
@@ -254,4 +264,35 @@ void ofApp::draw()
     }
     
     guiPanel.draw();
+}
+
+ofPolyline ofApp::lerpPolyline(ofPolyline poly1, ofPolyline poly2) {
+    ofPolyline lerpedPoly;
+    
+    for( int i = 0; i < poly1.getVertices().size(); i++) {
+        ofPoint v1 = poly1.getVertices()[i];
+        ofPoint v2 = poly2.getVertices()[i];
+        lerpedPoly.addVertex(ofLerp(v1.x, v2.x, 0.05), ofLerp(v1.y, v2.y, 0.05));
+    }
+
+    return lerpedPoly;
+}
+
+ofPath ofApp::polyToPath(ofPolyline poly) {
+    ofPath path;
+    
+    for( int i = 0; i < poly.getVertices().size(); i++) {
+        glm::vec2 vertex = poly.getVertices()[i];
+        if (i == 0) {
+            path.newSubPath();
+            path.moveTo(vertex.x, vertex.y);
+        } else {
+            path.lineTo(vertex.x, vertex.y);
+        }
+    }
+    
+    path.close();
+    path.simplify();
+    
+    return path;
 }
