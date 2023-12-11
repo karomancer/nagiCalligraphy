@@ -26,6 +26,8 @@ public:
     ofPixels irPixels;
     ofTexture depthTex;
     ofPixels depthPixels;
+    ofTexture rgbTex;
+    ofPixels rgbPixels;
     
     float xMultiplier, yMultiplier;
     
@@ -50,10 +52,13 @@ public:
     
     ofxCv::ContourFinder contourFinder;
     
+    ofParameter<bool> showDebugGrid;
+    ofParameter<bool> showIntermediary;
+    
+    // Controls for Actions
+    ofxGuiGroup actionGroup;
     ofxButton clearScreenButton;
     ofxButton takePhotoButton;
-    ofParameter<bool> showDebugGrid;    
-    ofParameter<bool> showIntermediary;
     
     // Controls for Kinect
     ofxGuiGroup kinectGuiGroup;

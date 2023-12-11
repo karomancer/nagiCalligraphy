@@ -1,8 +1,8 @@
 // ofApp.cpp
 #include "ofApp.h"
 
-const int KINECT_DEPTH_WIDTH = 512;
-const int KINECT_DEPTH_HEIGHT = 424;
+const int KINECT_WIDTH = 512;
+const int KINECT_HEIGHT = 424;
 const int BITMAP_STRING_PADDING = 10;
 const int POLYLINE_COUNT = 40;
 
@@ -10,8 +10,8 @@ void ofApp::setup()
 {
     int width = ofGetScreenWidth();
     int height = ofGetScreenHeight();
-    xMultiplier = (float) ofGetScreenWidth() / KINECT_DEPTH_WIDTH;
-    yMultiplier = (float) ofGetScreenHeight() / KINECT_DEPTH_HEIGHT;
+    xMultiplier = (float) ofGetScreenWidth() / KINECT_WIDTH;
+    yMultiplier = (float) ofGetScreenHeight() / KINECT_HEIGHT;
     
     ofSetWindowShape(width, height);
     
@@ -20,13 +20,13 @@ void ofApp::setup()
     ofSetFrameRate(200);
     
     // Set up drawing bounds for mapping 512x424 to full screen later
-    drawBounds.set(0, 0, KINECT_DEPTH_WIDTH, KINECT_DEPTH_HEIGHT);
+    drawBounds.set(0, 0, KINECT_WIDTH, KINECT_HEIGHT);
     drawBounds.scaleTo(ofGetCurrentViewport(), OF_SCALEMODE_FILL);
     
     int halfWidth = ofGetWidth() / 2;
     int halfHeight = ofGetHeight() / 2;
-    int halfKinectWidth = KINECT_DEPTH_WIDTH / 2;
-    int halfKinectHeight = KINECT_DEPTH_HEIGHT / 2;
+    int halfKinectWidth = KINECT_WIDTH / 2;
+    int halfKinectHeight = KINECT_HEIGHT / 2;
     drawBoundsTopLeft.set(0, 0, halfWidth, halfHeight);
     drawBoundsTopRight.set(0, 0, halfWidth, halfHeight);
     drawBoundsBottomLeft.set(0, 0, halfWidth, halfHeight);
@@ -45,16 +45,20 @@ void ofApp::setup()
     
     // Set up GUI panel
     guiPanel.setup("BRUSH_STROKES", "settings.json");
-    guiPanel.add(clearScreenButton.setup("Clear screen"));
-    guiPanel.add(takePhotoButton.setup("Take screenshot"));
     guiPanel.add(showDebugGrid.set("Show debug grid", false));
     guiPanel.add(secondsToClear.set("seconds before clear", 10, 0, 60));
+    
+    actionGroup.setup("Actions");
+    actionGroup.add(clearScreenButton.setup("Clear screen"));
+    actionGroup.add(takePhotoButton.setup("Take screenshot"));
+    guiPanel.add(&actionGroup);
     
     clearScreenButton.addListener(this,&ofApp::clearCanvasFbo);
     takePhotoButton.addListener(this,&ofApp::saveScreen);
     
     // Kinect GUI options
     kinectGuiGroup.setup("Kinect");
+    kinectGuiGroup.add(showDepthMap.set("Show depth map", false));
     kinectGuiGroup.add(minDepth.set("Min depth", 0.5f, 0.5f, 8.f));
     kinectGuiGroup.add(maxDepth.set("Max depth", 5.f, 0.5f, 8.f));
     kinectGuiGroup.add(minIR.set("Min IR value", 0, 0, 255));
@@ -74,7 +78,7 @@ void ofApp::setup()
     
     // Set up Kinect
     ofxKinectV2::Settings kinectSettings;
-    kinectSettings.enableRGB = false;
+    kinectSettings.enableRGB = true;
     kinectSettings.enableIR = true;
     kinectSettings.enableRGBRegistration = false;
     kinect.open(0, kinectSettings);
@@ -84,7 +88,9 @@ void ofApp::setup()
 }
 
 void ofApp::clearCanvasFbo() {
-    canvasFbo.clear();
+    canvasFbo.begin();
+    ofClear(255);
+    canvasFbo.end();
 };
 
 void ofApp::saveScreen() {
@@ -105,20 +111,24 @@ void ofApp::update()
         depthPixels = kinect.getDepthPixels();
         depthTex.loadData(depthPixels);
         
+        // Camera
+        rgbPixels = kinect.getPixels();
+        rgbTex.loadData(rgbPixels);
+        
         // Infrared luminosity code
         irPixels = kinect.getIRPixels();
         irTex.loadData(irPixels);
+        
+        // Update blobs, outlines, and canvas FBOs
+        updateBlobs();
+        updateOutlines();
     }
-    
-    // Update blobs, outlines, and canvas FBOs
-    updateBlobs();
-    updateOutlines();
     updateCanvas();
     pruneTrackingObjects();
 }
 
 void ofApp::updateBlobs() {
-    blobPixels.allocate(KINECT_DEPTH_WIDTH, KINECT_DEPTH_HEIGHT, OF_IMAGE_GRAYSCALE);
+    blobPixels.allocate(KINECT_WIDTH, KINECT_HEIGHT, OF_IMAGE_GRAYSCALE);
     
     for (int y = 0; y < irPixels.getHeight(); y++) {
         for (int x = 0; x < irPixels.getWidth(); x++) {
@@ -167,7 +177,7 @@ void ofApp::updateCanvas() {
             ofPolyline prevPolyline = prevNagiTrackingMap[label];
             ofVec2f p1(prevPolyline.getVertices()[0].x, prevPolyline.getVertices()[0].y);
             ofVec2f p2(polyline.getVertices()[0].x, polyline.getVertices()[0].y);
-            float velocity = ofMap(abs(p1.distance(p2)), 0, 80, 1, 0.5);
+            float velocity = ofMap(abs(p1.distance(p2)), 0, 80, 1.5, 0.8);
             
             ofPolyline newPolyline = lerpPolyline(prevPolyline, polyline);
             
@@ -196,13 +206,13 @@ void ofApp::updateCanvas() {
 }
 
 void ofApp::updateOutlines() {
-    visionFbo.allocate(KINECT_DEPTH_WIDTH, KINECT_DEPTH_HEIGHT);
+    visionFbo.allocate(KINECT_WIDTH, KINECT_HEIGHT);
     
     // Using OpenCV's contour finder to find the different bounding boxes
     contourFinder.setMinAreaRadius(minContourArea);
     contourFinder.setMaxAreaRadius(maxContourArea);
     contourFinder.getTracker().setPersistence(persistence);
-    contourFinder.findContours(showDepthMap ? depthPixels : irPixels);
+    contourFinder.findContours(irPixels);
     std::vector<cv::Rect> blobs = contourFinder.getBoundingRects();
     std::vector<ofPolyline> polylines = contourFinder.getPolylines();
     
@@ -234,13 +244,20 @@ void ofApp::draw()
         int width = ofGetWidth();
         int height = ofGetHeight();
         
-        depthTex.draw(drawBoundsTopLeft);
+        if (showDepthMap) {
+            depthTex.draw(drawBoundsTopLeft);
+            ofDrawBitmapStringHighlight("Kinect Depth Camera", BITMAP_STRING_PADDING, height/2 + BITMAP_STRING_PADDING);
+        } else {
+            rgbTex.draw(drawBoundsTopLeft);
+            ofDrawBitmapStringHighlight("Kinect RGB Camera", BITMAP_STRING_PADDING, height/2 + BITMAP_STRING_PADDING);
+        }
+        
         irTex.draw(drawBoundsTopRight);
         blobImage.draw(drawBoundsBottomLeft);
         visionFbo.draw(drawBoundsBottomLeft);
         canvasFbo.draw(drawBoundsBottomRight);
         
-        ofDrawBitmapStringHighlight("Kinect Depth Camera", BITMAP_STRING_PADDING, height/2 + BITMAP_STRING_PADDING);
+        
         ofDrawBitmapStringHighlight("Kinect IR Camera", width/2 + BITMAP_STRING_PADDING, height/2 + BITMAP_STRING_PADDING);
         ofDrawBitmapStringHighlight("Masked IR + CV Contours", BITMAP_STRING_PADDING, height - BITMAP_STRING_PADDING);
         ofDrawBitmapStringHighlight("Output", width/2 + BITMAP_STRING_PADDING, height - BITMAP_STRING_PADDING);
@@ -248,16 +265,16 @@ void ofApp::draw()
         // Get the point distance using the SDK function (in meters).
         float mouseX = ofGetMouseX();
         float mouseY = ofGetMouseY();
-        float mappedY = ofMap(mouseY, 0, ofGetHeight()/2, 0, KINECT_DEPTH_HEIGHT);
+        float mappedY = ofMap(mouseY, 0, ofGetHeight()/2, 0, KINECT_HEIGHT);
         // If cursor is in depth map
-        if (drawBoundsTopLeft.inside(mouseX, mouseY)) {
-            float mappedX = ofMap(mouseX, 0, ofGetWidth()/2, 0, KINECT_DEPTH_WIDTH);
+        if (drawBoundsTopLeft.inside(mouseX, mouseY) && showDepthMap) {
+            float mappedX = ofMap(mouseX, 0, ofGetWidth()/2, 0, KINECT_WIDTH);
             float distAtMouse = kinect.getDistanceAt(mappedX, mappedY);
             ofDrawBitmapStringHighlight("Depth: " + ofToString(distAtMouse, 3), mouseX, mouseY  + BITMAP_STRING_PADDING);
         }
         // If cursor is in IR map
         else if (drawBoundsTopRight.inside(mouseX, mouseY)) {
-            float mappedX = ofMap(mouseX, ofGetWidth()/2, ofGetWidth(), 0, KINECT_DEPTH_WIDTH);
+            float mappedX = ofMap(mouseX, ofGetWidth()/2, ofGetWidth(), 0, KINECT_WIDTH);
             float ir = irPixels.getColor(mappedX, mappedY).r;
             ofDrawBitmapStringHighlight("IR: " + ofToString(ir, 3), mouseX, mouseY  + BITMAP_STRING_PADDING);
         }
