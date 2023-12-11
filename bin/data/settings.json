@@ -1,23 +1,24 @@
 {
     "BRUSH_STROKES": {
         "Contour_Finder": {
-            "Max_area": "44.3878",
-            "Min_area": "4.59184",
-            "Persistence": "872",
+            "Max_area": "59.6939",
+            "Min_area": "6.12245",
+            "Persistence": "1000",
             "Show_contours": "1"
         },
         "Kinect": {
             "Base_pixel_size": "50",
             "Max_IR_value": "255",
             "Max_depth": "1.83929",
-            "Min_IR_value": "75",
+            "Min_IR_value": "32",
             "Min_depth": "0.5",
             "Show_Kinect_Depth_Map": "0"
         },
         "Milliseconds_before_clearing": "20",
         "Show_debug_grid": "1",
         "Show_intermediary_step": "0",
-        "ms_before_clear": "4700"
+        "ms_before_clear": "10000",
+        "seconds_before_clear": "6"
     },
     "DEPTH_DOTS": {
         "Base_pixel_size": "0.75",

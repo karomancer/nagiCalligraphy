@@ -64,8 +64,8 @@ public:
     ofParameter<float> maxContourArea;
     ofParameter<int> persistence;
     
-    ofParameter<int> millisToClear;
-    int ellapsedMillisSinceClear;
+    ofParameter<int> secondsToClear;
+    int ellapsedMillisSinceNagiSeen;
     
     ofxPanel guiPanel;
     

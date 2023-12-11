@@ -42,7 +42,7 @@ void ofApp::setup()
     // Set up GUI panel
     guiPanel.setup("BRUSH_STROKES", "settings.json");
     guiPanel.add(showDebugGrid.set("Show debug grid", false));
-    guiPanel.add(millisToClear.set("ms before clear", 600, 0, 10000));
+    guiPanel.add(secondsToClear.set("seconds before clear", 10, 0, 60));
     
     // Kinect GUI options
     kinectGuiGroup.setup("Kinect");
@@ -67,13 +67,11 @@ void ofApp::setup()
     ofxKinectV2::Settings kinectSettings;
     kinectSettings.enableRGB = false;
     kinectSettings.enableIR = true;
-    kinectSettings.enableRGBRegistration = false;
-    //    kinectSettings.config.MinDepth = minDepth;
-    //    kinectSettings.config.MaxDepth = maxDepth;
+    kinectSettings.enableRGBRegistration = false;    
     kinect.open(0, kinectSettings);
-    kinect.irExposure = 0.1f; // this was totally not documented
+    kinect.irExposure = 0.05f; // this was totally not documented
     
-    ellapsedMillisSinceClear = 0;
+    ellapsedMillisSinceNagiSeen = 0;
 }
 
 void ofApp::update()
@@ -138,7 +136,7 @@ void ofApp::updateCanvas() {
     
     int i = 0;
     for (auto it = nagiTrackingMap.begin(); it != nagiTrackingMap.end(); ++it) {
-        int label = it->first;        
+        int label = it->first;
         ofSetColor(ofColor(i % 2 != 0 ? label : 0, 0, i % 2 == 0 ? label : 0));
         ofFill();
         cv::Rect boundingRect = it->second;
@@ -168,13 +166,15 @@ void ofApp::updateCanvas() {
         i++;
     }
     
-    if (ofGetElapsedTimeMillis() - ellapsedMillisSinceClear < millisToClear) {
-        ofEnableAlphaBlending();
-        ofSetColor(255, 2);
-        ofDrawRectangle(0, 0, ofGetWidth(), ofGetHeight());
-    } else {
-        ellapsedMillisSinceClear = ofGetElapsedTimeMillis();
-        ofBackground(255);
+    if (presentIds.size() == 0) {
+        // if nagis don't exist and it's been secondsToClear since last seen, start fading
+        if (ofGetElapsedTimeMillis() - ellapsedMillisSinceNagiSeen > secondsToClear * 1000) {
+            ofEnableAlphaBlending();
+            ofSetColor(255, 10);
+            ofDrawRectangle(0, 0, ofGetWidth(), ofGetHeight());
+        }
+    } else { // if nagis exist, update last time they were seen
+        ellapsedMillisSinceNagiSeen = ofGetElapsedTimeMillis();
     }
     
     canvasFbo.end();
@@ -208,7 +208,6 @@ void ofApp::updateOutlines() {
         
         ofDrawRectangle(boundingRect.x, boundingRect.y, boundingRect.width, boundingRect.height);
     }
-    
     visionFbo.end();
 }
 
