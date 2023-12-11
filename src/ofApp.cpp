@@ -50,7 +50,7 @@ void ofApp::setup()
     kinectGuiGroup.add(maxDepth.set("Max depth", 5.f, 0.5f, 8.f));
     kinectGuiGroup.add(minIR.set("Min IR value", 0, 0, 255));
     kinectGuiGroup.add(maxIR.set("Max IR value", 255, 255, 255));
-    kinectGuiGroup.add(anchorDepth.set("Base pixel size", 1, 1, 20));
+    kinectGuiGroup.add(anchorDepth.set("Base pixel size", 1, 1, 50));
     guiPanel.add(&kinectGuiGroup);
     
     // Contour finder GUI options
@@ -83,6 +83,9 @@ void ofApp::update()
     // Only load the data if there is a new frame to process.
     if (kinect.isFrameNew())
     {
+        presentIds.clear();
+        idsToDelete.clear();
+        
         // Depth code
         depthPixels = kinect.getDepthPixels();
         depthTex.loadData(depthPixels);
@@ -95,6 +98,7 @@ void ofApp::update()
         updateBlobs();
         updateOutlines();
         updateCanvas();
+        pruneTrackingObjects();
     }
 }
 
@@ -111,6 +115,20 @@ void ofApp::updateBlobs() {
     blobImage.setFromPixels(blobPixels);
 }
 
+void ofApp::pruneTrackingObjects() {
+    // Map is from tracking object ID -> true (dumb, I know)
+    // Go through that and see if anything needs to be deleted
+    // Could this be more efficient? Yes!
+    // It's 3AM and I don't want to think about it anymore lol
+    for (auto it = nagiTrackingMap.begin(); it != nagiTrackingMap.end(); ++it) {
+        idsToDelete.push_back(it->first);
+    }
+    
+    for (int i = 0; i < idsToDelete.size(); i++) {
+        nagiTrackingMap.erase(idsToDelete[i]);
+    }
+}
+
 void ofApp::updateCanvas() {
     canvasFbo.begin();
     ofSetColor(ofColor::black);
@@ -118,23 +136,36 @@ void ofApp::updateCanvas() {
     float xMultiplier = (float) ofGetScreenWidth() / depthPixels.getWidth();
     float yMultiplier = (float) ofGetScreenHeight() / depthPixels.getHeight();
     
-    for (int _x = 0; _x < currBrush.width; _x++) {
-        for (int _y = 0; _y < currBrush.height; _y++) {
-            float dist = kinect.getDistanceAt(currBrush.x + _x, currBrush.y + _y);
+    int i = 0;
+    for (auto it = nagiTrackingMap.begin(); it != nagiTrackingMap.end(); ++it) {
+        int label = it->first;        
+        ofSetColor(ofColor(i % 2 != 0 ? label : 0, 0, i % 2 == 0 ? label : 0));
+        ofFill();
+        cv::Rect boundingRect = it->second;
+        
+        // if not found
+        if (prevNagiTrackingMap.find(label) == prevNagiTrackingMap.end()) {
+            prevNagiTrackingMap[label] = boundingRect;
+            ofDrawCircle(boundingRect.x, boundingRect.y, anchorDepth);
+        } else {
+            cv::Rect prevBoundingRect = prevNagiTrackingMap[label];
+            int x = ofLerp(prevBoundingRect.x, boundingRect.x, 0.1);
+            int y = ofLerp(prevBoundingRect.y, boundingRect.y, 0.1);
+            int width = ofLerp(prevBoundingRect.width, boundingRect.width, 0.1);
+            int height = ofLerp(prevBoundingRect.height, boundingRect.height, 0.1);
             
-            if (dist > minDepth && dist < maxDepth) {
-                int newX = ofLerp(prevBrush.x + _x, currBrush.x + _x, 0.5);
-                int newY = ofLerp(prevBrush.y + _y, currBrush.y + _y, 0.5);
-                
-                float alpha = ofMap(dist, minDepth, maxDepth, 255, 100);
-                float radius = ofMap(dist, minDepth, maxDepth, anchorDepth, 0);
-                float paintSplatter = ofNoise(newX, newY);
-                float randomPaintSplatter = ofRandom(0, anchorDepth);
-                
-                ofColor color = ofColor(0, 0, 0, alpha);
-                ofDrawCircle(newX * xMultiplier + paintSplatter * anchorDepth, newY * yMultiplier + paintSplatter * anchorDepth, radius);
-            }
+            
+            ofVec2f p1(boundingRect.x, boundingRect.y);
+            ofVec2f p2(prevBoundingRect.x, prevBoundingRect.y);
+            float velocity = abs(p1.distance(p2));
+            float radius = ofMap(velocity, 0, 200, anchorDepth, 1);
+            float randomPaintSplatter = ofRandom(0, 5);
+            
+            prevNagiTrackingMap[label] = cv::Rect(x, y, width, height);
+            
+            ofDrawCircle(x * xMultiplier, y * yMultiplier, radius + randomPaintSplatter);
         }
+        i++;
     }
     
     if (ofGetElapsedTimeMillis() - ellapsedMillisSinceClear < millisToClear) {
@@ -158,6 +189,7 @@ void ofApp::updateOutlines() {
     contourFinder.getTracker().setPersistence(persistence);
     contourFinder.findContours(showDepthMap ? depthPixels : irPixels);
     std::vector<cv::Rect> blobs = contourFinder.getBoundingRects();
+    std::vector<ofPolyline> polylines = contourFinder.getPolylines();
     
     // Draw the contour in its own FBO to render later
     visionFbo.begin();
@@ -168,17 +200,13 @@ void ofApp::updateOutlines() {
         int label = contourFinder.getLabel(i);
         ofColor color = ofColor::red;
         cv::Rect boundingRect = blobs[i];
+        nagiTrackingMap[label] = boundingRect;
+        presentIds.push_back(label);
         
         color.setHueAngle(color.getHueAngle() + label * 5);
         ofSetColor(color);
         
         ofDrawRectangle(boundingRect.x, boundingRect.y, boundingRect.width, boundingRect.height);
-    }
-    
-    // for now, just set one nagi
-    if (blobs.size() > 0) {
-        prevBrush = currBrush;
-        currBrush = blobs[0];
     }
     
     visionFbo.end();

@@ -14,6 +14,7 @@ public:
     void updateBlobs();
     void updateCanvas();
     void updateOutlines();
+    void pruneTrackingObjects();
     void draw();
     
     ofxKinectV2 kinect;
@@ -24,7 +25,7 @@ public:
     
     ofRectangle drawBounds;
     ofRectangle drawBoundsTopLeft, drawBoundsTopRight, drawBoundsBottomLeft, drawBoundsBottomRight;
-        
+    
     ofFbo canvasFbo;
     ofFbo visionFbo;
     ofFbo irFbo;
@@ -33,8 +34,13 @@ public:
     ofImage blobImage;
     
     // For now, just one
-    cv::Rect prevBrush;
-    cv::Rect currBrush;
+    std::map<int, cv::Rect> prevNagiTrackingMap;
+    std::map<int, cv::Rect> nagiTrackingMap;
+    // We're going to be using these to determine
+    // which objects we're still tracking
+    // (and idsToDelete is to send a delete message to the other side)
+    std::vector<int> presentIds = {};
+    std::vector<int> idsToDelete = {};
     
     ofxCv::ContourFinder contourFinder;
     
