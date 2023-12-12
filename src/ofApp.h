@@ -42,8 +42,9 @@ public:
     ofImage blobImage;
     
     // For now, just one
-    std::map<int, ofPolyline> prevNagiTrackingMap;
-    std::map<int, ofPolyline> nagiTrackingMap;
+    std::map<int, cv::Rect> prevNagiTrackingMap;
+    std::map<int, cv::Rect> nagiTrackingMap;
+    ofPath currentBrush;
     // We're going to be using these to determine
     // which objects we're still tracking
     // (and idsToDelete is to send a delete message to the other side)

@@ -155,41 +155,67 @@ void ofApp::pruneTrackingObjects() {
 }
 
 void ofApp::updateCanvas() {
-    canvasFbo.begin();
     
-    int i = 0;
-    for (auto it = nagiTrackingMap.begin(); it != nagiTrackingMap.end(); ++it) {
-        int label = it->first;
-        int colorValueR = i % 2 != 0 ? label : 0;
-        int colorValueB = i % 2 == 0 ? label : 0;
-        ofPolyline polyline = it->second;
-        
-        ofSetColor(ofColor(colorValueR, 0, colorValueB));
+    canvasFbo.begin();
+        // No OpenCV
+        ofSetColor(ofColor::black);
         ofFill();
-                
-        // if not found
-        if (prevNagiTrackingMap.find(label) == prevNagiTrackingMap.end()) {
-            prevNagiTrackingMap[label] = polyline;
-            ofPath path = polyToPath(polyline);
-            path.setFillColor(ofColor(colorValueR, 0, colorValueB));
-            path.draw();
-        } else {
-            ofPolyline prevPolyline = prevNagiTrackingMap[label];
-            ofVec2f p1(prevPolyline.getVertices()[0].x, prevPolyline.getVertices()[0].y);
-            ofVec2f p2(polyline.getVertices()[0].x, polyline.getVertices()[0].y);
-            float velocity = ofMap(abs(p1.distance(p2)), 0, 80, 1.5, 0.8);
-            
-            ofPolyline newPolyline = lerpPolyline(prevPolyline, polyline);
-            
-            ofPath path = polyToPath(newPolyline);
-            path.setFillColor(ofColor(colorValueR, 0, colorValueB));
-            path.scale(velocity, velocity);
-            path.draw();
-            
-            prevNagiTrackingMap[label] = newPolyline;
-            i++;
+        for (int y = 0; y < KINECT_HEIGHT; y++) {
+            for (int x = 0; x < KINECT_WIDTH; x++) {
+                if (irPixels.getColor(x, y).r > minIR && kinect.getDistanceAt(x, y) > minDepth) {
+                    ofDrawCircle(x * xMultiplier, y * yMultiplier, anchorDepth);
+                }
+            }
         }
-    }
+//
+// Use OpenCV
+//
+//    int i = 0;
+//    for (auto it = nagiTrackingMap.begin(); it != nagiTrackingMap.end(); ++it) {
+//        int label = it->first;
+//        int colorValueR = i % 2 != 0 ? label : 0;
+//        int colorValueB = i % 2 == 0 ? label : 0;
+//        cv::Rect boundingRect = it->second;
+//
+//        ofSetColor(ofColor(colorValueR, 0, colorValueB));
+//        ofFill();
+////
+////        // if not found
+//        if (prevNagiTrackingMap.find(label) == prevNagiTrackingMap.end()) {
+//            prevNagiTrackingMap[label] = boundingRect;
+//            ofDrawCircle(boundingRect.x, boundingRect.y, anchorDepth);
+//            //            ofPath path = polyToPath(polyline);
+//            //            path.setFillColor(ofColor(colorValueR, 0, colorValueB));
+//            //            path.draw();
+//        } else {
+//
+//            //            ofPolyline prevPolyline = prevNagiTrackingMap[label];
+//            //            ofVec2f p1(prevPolyline.getVertices()[0].x, prevPolyline.getVertices()[0].y);
+//            //            ofVec2f p2(polyline.getVertices()[0].x, polyline.getVertices()[0].y);
+//            //            float velocity = ofMap(abs(p1.distance(p2)), 0, 80, 1.5, 0.8);
+//
+//            cv::Rect prevBoundingRect = prevNagiTrackingMap[label];
+//            int x = ofLerp(prevBoundingRect.x, boundingRect.x, 0.1);
+//            int y = ofLerp(prevBoundingRect.y, boundingRect.y, 0.1);
+//            int width = ofLerp(prevBoundingRect.width, boundingRect.width, 0.1);
+//            int height = ofLerp(prevBoundingRect.height, boundingRect.height, 0.1);
+//
+//
+//            ofVec2f p1(boundingRect.x, boundingRect.y);
+//            ofVec2f p2(prevBoundingRect.x, prevBoundingRect.y);
+//            float velocity = abs(p1.distance(p2));
+//            float radius = ofMap(velocity, 0, 200, anchorDepth, 1);
+//            float randomPaintSplatter = ofRandom(0, 5);
+//
+//            ofDrawCircle(x * xMultiplier, y * yMultiplier, radius);
+//            if (randomPaintSplatter > 3) {
+//                ofDrawCircle(x * xMultiplier + ofRandom(0, 5), y * yMultiplier + ofRandom(0,5), randomPaintSplatter);
+//            }
+//
+//            prevNagiTrackingMap[label] = cv::Rect(x, y, width, height);
+//        }
+//        i++;
+//    }
     
     if (presentIds.size() == 0) {
         // if nagis don't exist and it's been secondsToClear since last seen, start fading
@@ -226,7 +252,9 @@ void ofApp::updateOutlines() {
         ofColor color = ofColor::red;
         cv::Rect boundingRect = blobs[i];
         
-        nagiTrackingMap[label] = polylines[i].getResampledByCount(POLYLINE_COUNT);
+        nagiTrackingMap[label] = boundingRect;
+        currentBrush = polyToPath(polylines[i]);
+        //        nagiTrackingMap[label] = polylines[i].getResampledByCount(POLYLINE_COUNT);
         presentIds.push_back(label);
         
         color.setHueAngle(color.getHueAngle() + label * 5);
@@ -297,7 +325,7 @@ ofPolyline ofApp::lerpPolyline(ofPolyline poly1, ofPolyline poly2) {
         ofPoint v2 = poly2.getVertices()[i];
         lerpedPoly.addVertex(ofLerp(v1.x, v2.x, 0.05), ofLerp(v1.y, v2.y, 0.05));
     }
-
+    
     return lerpedPoly;
 }
 
@@ -316,7 +344,7 @@ ofPath ofApp::polyToPath(ofPolyline poly) {
     }
     
     path.close();
-//    path.simplify();
+    path.simplify();
     
     return path;
 }
